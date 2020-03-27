@@ -38,9 +38,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # libraries
     'rest_framework',
+    'rest_framework.authtoken',
+    'rest_auth',
+    'django.contrib.sites',
+    'allauth',
+    'allauth.account',
+    'rest_auth.registration',
     'corsheaders',
     'drf_yasg',
+    # custom app
     'users',
     'friends',
     'posts',
@@ -134,8 +142,17 @@ STATIC_URL = '/static/'
 #     )
 # }
 
+# django-rest-auth @& allauth settings
+SITE_ID = 1
+AUTH_USER_MODEL = "users.User"
+REST_AUTH_SERIALIZERS = {
+    'USER_DETAILS_SERIALIZER': 'users.serializers.UserSerializer'
+}
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' 
 
 # django-cors-headers settings
 CORS_ORIGIN_ALLOW_ALL = True
+
+DEFAULT_HOST = "http://127.0.0.1:8000/"
 
 django_heroku.settings(locals())

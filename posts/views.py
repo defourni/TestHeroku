@@ -12,10 +12,14 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404
 
 from posts.models import Post
-from posts.serializers import PostImageSerializer, PostSerializer, PostReadOnlySerializer
+from posts.serializers import PostSerializer
 from posts.permissions import IsAuthorOrReadOnly, PostVisibility
 
 from friends.models import Friend
+
+import sys
+sys.path.append("..") 
+import connection_helper as helper
 
 def check_friend(author, user):
     num_friends = Friend.objects.filter(Q(followee=author) & Q(follower=user) & Q(mutual=True)).count()
@@ -41,19 +45,19 @@ def get_visible_posts(posts, user):
 
     for post in posts:
         if post.author != user:
-            if post.visibility == 2:                # not author and the post is private
+            if post.visibility == "PRIVATE":                # not author and the post is private
                 exclude_posts.append(post.id)
-            elif post.visibility == 3 :             # not author and the post is friends visible
+            elif post.visibility == "FRIENDS" :             # not author and the post is friends visible
                 visible = check_friend(post.author, user)
                 if not visible:
                     exclude_posts.append(post.id)
-            elif post.visibility == 4:              # not author and the post is FOAF visible
+            elif post.visibility == "FOAF":              # not author and the post is FOAF visible
                 visible = check_FOAF(post.author, user)
                 if not visible:
                     exclude_posts.append(post.id)
-            elif post.visibility == 5:              # not author and the post is another author visible
-                if post.another_author != user:
-                    exclude_posts.append(post.id)
+            # elif post.visibility == 5:              # not author and the post is another author visible
+            #     if post.another_author != user:
+            #         exclude_posts.append(post.id)
             # elif obj.visibility == 6:               # not author and the post is friends on same host visible
             #     # TODO: check friendship
 
@@ -72,53 +76,17 @@ class PostViewSet(viewsets.ModelViewSet):
         Permission:
             Any users: read only permission with posts shared with them
 
-        text_type field choices:
-            1, plaintext
-            2, markdown
-
-        visibility field choices:
-            1, public
-            2, private
-            3, friends
-            4, friends and friends of friends
-            5, another author
-            6, friends on the same host
-
     list:
         Return all listed public posts.
 
         Permission:
             Any users: read only permission with posts shared with them
 
-        text_type field choices:
-            1, plaintext
-            2, markdown
-
-        visibility field choices:
-            1, public
-            2, private
-            3, friends
-            4, friends and friends of friends
-            5, another author
-            6, friends on the same host
-
     create:
         Create a new post.
 
         Permission:
             Any users: write permission
-
-        text_type field choices:
-            1, plaintext
-            2, markdown
-
-        visibility field choices:
-            1, public
-            2, private
-            3, friends
-            4, friends and friends of friends
-            5, another author
-            6, friends on the same host
 
     delete:
         Remove a existing post.
@@ -164,9 +132,12 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer.save(author=self.request.user)
 
     def list(self, request):
-        queryset = Post.objects.filter(Q(visibility=1) & Q(unlist=False))
+        queryset = Post.objects.filter(Q(visibility="PUBLIC") & Q(unlisted=False))
         serializer = self.get_serializer_class()(queryset, many=True, context={'request': request})
-        return Response(serializer.data)
+
+        remote_posts = helper.get_remote_posts("https://spongebook-develop.herokuapp.com")
+        # return Response(serializer.data)
+        return Response(serializer.data + remote_posts)
 
 class VisiblePostView(generics.ListAPIView):
     '''
@@ -179,9 +150,9 @@ class VisiblePostView(generics.ListAPIView):
 
     def get_queryset(self):
         if self.request.user.is_anonymous:      # to check if current user is an anonymous user first, since Q query cannot accept anonymous user
-            return Post.objects.filter(Q(visibility=1) & Q(unlist=False))
+            return Post.objects.filter(Q(visibility="PUBLIC") & Q(unlisted=False))
         else:
-            posts = get_visible_posts(Post.objects.filter(Q(unlist=False)), self.request.user)
+            posts = get_visible_posts(Post.objects.filter(Q(unlisted=False)), self.request.user)
             return posts
 
 class VisibleUserPostView(generics.ListAPIView):
@@ -190,14 +161,14 @@ class VisibleUserPostView(generics.ListAPIView):
     '''
     
     # see more: https://www.django-rest-framework.org/api-guide/filtering/#filtering-against-the-url
-    serializer_class = PostReadOnlySerializer
+    serializer_class = PostSerializer
     permission_classes = (PostVisibility,)
 
     def get_queryset(self):
         user_id = self.kwargs['user_id']
 
         if self.request.user.is_anonymous:      # to check if current user is an anonymous user first, since Q query cannot accept anonymous user
-            return Post.objects.filter(Q(visibility=1) & Q(author=user_id) & Q(unlist=False))
+            return Post.objects.filter(Q(visibility="PUBLIC") & Q(author=user_id) & Q(unlisted=False))
         else:
-            posts = get_visible_posts(Post.objects.filter(Q(author=user_id) & Q(unlist=False)), self.request.user)
+            posts = get_visible_posts(Post.objects.filter(Q(author=user_id) & Q(unlisted=False)), self.request.user)
             return posts
